@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Prediction</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            cursor: pointer;
+        }
+
+        .upload-area.dragover {
+            border-color: #007bff;
+        }
+
+        #uploaded-image {
+            max-width: 400px;
+            /* 限制图片的最大宽度 */
+            max-height: 300px;
+            /* 限制图片的最大高度 */
+            margin-top: 20px;
+            display: block;
+            object-fit: contain;
+            /* 确保图片按比例缩放 */
+
+            margin-left: auto;
+            margin-right: auto;
+            /* 水平居中 */
+
+        }
+
+        #prediction {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            margin: 20px 0;
+        }
+
+        #chart-container {
+            width: 80%;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Image Prediction</h1>
+
+    <div class="upload-area" id="upload-area">
+        <p>Click or drag an image to upload</p>
+        <input type="file" id="file-input" accept="image/*" style="display: none;">
+    </div>
+
+    <img id="uploaded-image" alt="Uploaded Image" style="display: none;">
+
+    <div id="prediction" style="display: none;">Most Likely: <span id="top-prediction"></span></div>
+
+    <div id="chart-container" style="display: none;">
+        <canvas id="probability-chart"></canvas>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadedImage = document.getElementById('uploaded-image');
+        const predictionText = document.getElementById('prediction');
+        const topPrediction = document.getElementById('top-prediction');
+        const chartContainer = document.getElementById('chart-container');
+        const chartCanvas = document.getElementById('probability-chart');
+        let chartInstance;
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileUpload(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFileUpload(file);
+        });
+
+        function handleFileUpload(file) {
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                uploadedImage.src = reader.result;
+                uploadedImage.style.display = 'block';
+                uploadImageToAPI(file);
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        async function uploadImageToAPI(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await axios.post('http://127.0.0.1:8000/predict', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                const predictions = response.data.predictions;
+                displayPrediction(predictions);
+            } catch (error) {
+                console.error('Error uploading image:', error);
+                alert('Failed to get predictions. Please try again.');
+            }
+        }
+
+        function displayPrediction(predictions) {
+            const topPredictionData = predictions[0];
+            const labels = predictions.map(item => item[0]);
+            const probabilities = predictions.map(item => (item[1] * 100).toFixed(2));
+
+            topPrediction.textContent = `${topPredictionData[0]} (${(topPredictionData[1] * 100).toFixed(2)}%)`;
+            predictionText.style.display = 'block';
+
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(chartCanvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Probability (%)',
+                        data: probabilities,
+                        backgroundColor: 'rgba(0, 123, 255, 0.6)',
+                        borderColor: 'rgba(0, 123, 255, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+
+            chartContainer.style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>
